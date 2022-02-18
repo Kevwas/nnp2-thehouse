@@ -15,6 +15,12 @@ import {
   updateDoc,
   setDoc,
   // writeBatch,
+  // OFFLINE PERSISTENCE:
+  enableIndexedDbPersistence,
+  initializeFirestore,
+  CACHE_SIZE_UNLIMITED,
+  disableNetwork,
+  enableNetwork,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -26,11 +32,26 @@ import {
 import firebaseConfig from "./firebaseConfig";
 
 // init firebase
-initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
+initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+});
 
 // init services
 const db = getFirestore();
 const auth = getAuth();
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code == "failed-precondition") {
+    // Multiple tabs open, persistence can only be enabled
+    // in one tab at a a time.
+    // ...
+  } else if (err.code == "unimplemented") {
+    // The current browser does not support all of the
+    // features required to enable persistence
+    // ...
+  }
+});
+// Subsequent queries will use persistence, if it was enabled successfully
 
 // collection ref
 const collRef = collection(db, "#thehotel");
@@ -46,64 +67,77 @@ const q = query(
 // const q = query(collRef, orderBy("createdAt"));
 
 // get collection data
-getDocs(collRef)
-  .then((snapshot) => {
-    let books = [];
-    snapshot.docs.forEach((doc) => {
-      books.push({
-        ...doc.data(),
-        id: doc.id,
-      });
-    });
-    console.log("Get all collection documents:");
-    console.log(books);
-  })
-  .catch((err) => {
-    console.log(err.message);
-  });
+// getDocs(collRef)
+//   .then((snapshot) => {
+//     let books = [];
+//     snapshot.docs.forEach((doc) => {
+//       books.push({
+//         ...doc.data(),
+//         id: doc.id,
+//       });
+//     });
+//     console.log("Get all collection documents:");
+//     console.log(books);
+//   })
+//   .catch((err) => {
+//     console.log(err.message);
+//   });
 
 // get collection data for a specific query
-getDocs(q)
-  .then((snapshot) => {
-    let documents = [];
-    snapshot.docs.forEach((doc) => {
-      documents.push({
-        ...doc.data(),
-        id: doc.id,
-      });
-    });
-    console.log("Get collection for a specific query: ");
-    console.log(documents);
-  })
-  .catch((err) => {
-    console.log(err.message);
-  });
+// getDocs(q)
+//   .then((snapshot) => {
+//     let documents = [];
+//     snapshot.docs.forEach((doc) => {
+//       documents.push({
+//         ...doc.data(),
+//         id: doc.id,
+//       });
+//     });
+//     console.log("Get collection for a specific query: ");
+//     console.log(documents);
+//   })
+//   .catch((err) => {
+//     console.log(err.message);
+//   });
 
 // get collection data in real time
-const unsubCol = onSnapshot(collRef, (snapshot) => {
-  let documents = [];
-  snapshot.docs.forEach((doc) => {
-    documents.push({
-      ...doc.data(),
-      id: doc.id,
-    });
+// const unsubCol = onSnapshot(collRef, (snapshot) => {
+//   let documents = [];
+//   snapshot.docs.forEach((doc) => {
+//     documents.push({
+//       ...doc.data(),
+//       id: doc.id,
+//     });
+//   });
+//   console.log("Get all collection documents in real time: ");
+//   console.log(documents);
+// });
+
+// Listen to offline data
+onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+  snapshot.docChanges().forEach((change) => {
+    console.log(change);
+    if (change.type === "added") {
+      console.log("New room: ", change.doc.data());
+    }
+
+    const source = snapshot.metadata.fromCache ? "local cache" : "server";
+    console.log("Data came from: " + source);
   });
-  console.log("Get all collection documents in real time: ");
-  console.log(documents);
 });
 
 // get collection data in real time for a specific query
-const unsubDoc = onSnapshot(q, (snapshot) => {
-  let documents = [];
-  snapshot.docs.forEach((doc) => {
-    documents.push({
-      ...doc.data(),
-      id: doc.id,
-    });
-  });
-  console.log("Get collection for a specific query in real time: ");
-  console.log(documents);
-});
+// const unsubDoc = onSnapshot(q, (snapshot) => {
+//   let documents = [];
+//   snapshot.docs.forEach((doc) => {
+//     documents.push({
+//       ...doc.data(),
+//       id: doc.id,
+//     });
+//   });
+//   console.log("Get collection for a specific query in real time: ");
+//   console.log(documents);
+// });
 
 // adding documents
 const addDocumentForm = document.querySelector(".add");
@@ -172,8 +206,14 @@ getDocumentForm.addEventListener("submit", (e) => {
   const docRef = doc(db, "#thehotel", getDocumentForm.id.value);
 
   console.log("############## UPDATE: ##############");
-  getDoc(docRef).then((doc) => {
+  getDoc(docRef, { includeMetadataChanges: true }).then((doc) => {
     console.log(doc.data(), doc.id);
+
+    console.log(doc);
+    const source = doc.metadata.fromCache ? "local cache" : "server";
+    const pendingwrites = doc.metadata.hasPendingWrites;
+    console.log("Data came from: " + source);
+    console.log("Has pending writes: " + pendingwrites);
     getDocumentForm.reset();
   });
 });
@@ -197,7 +237,7 @@ subscribeDocumentForm.addEventListener("submit", (e) => {
 const unsubButton = document.querySelector(".unsub");
 unsubButton.addEventListener("click", () => {
   console.log("unsubscribing");
-  // unsubCol()
+  unsubCol();
   unsubDoc();
 });
 
@@ -283,4 +323,15 @@ document.addEventListener("DOMContentLoaded", () => {
       signupForm.hidden = false;
     }
   });
+});
+
+const network_switch = document.querySelector(".toggler");
+network_switch.addEventListener("change", async (e) => {
+  if (e.target.checked) {
+    await enableNetwork(db);
+    alert("Network access enabled.");
+  } else {
+    await disableNetwork(db);
+    alert("Network access disabled.");
+  }
 });
