@@ -19,6 +19,18 @@
     </label>
 
     <div id="app">
+      <br /><br />
+      <form class="search">
+        <label for="froom">Search Rooms:</label><br />
+        <input
+          type="text"
+          id="froom"
+          name="froom"
+          placeholder="Room name, type or comments"
+        /><br />
+      </form>
+
+      <br /><br />
       <h3>Add a new Room:</h3>
       <form class="add">
         <label for="id">id:</label>
@@ -83,6 +95,17 @@
 
         <button>subscribe a room</button>
       </form>
+
+      <br /><br />
+      <form class="upload">
+        <label for="image">Image:</label>
+        <input type="file" name="image" required />
+        <button>Upload image</button>
+      </form>
+      <br />
+      <button class="uPause">Pause upload</button>
+      <button class="uResume">Resume upload</button>
+      <button class="uCancel">Cancel upload</button>
 
       <br /><br />
       <button class="unsub">unsubscribe from db/auth changes</button>

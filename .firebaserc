@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "fir-test-8931d",
+    "firebase-test": "fir-test-8931d"
+  },
+  "targets": {}
+}

@@ -29,7 +29,21 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
 } from "firebase/auth";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+} from "firebase/storage";
 import firebaseConfig from "./firebaseConfig";
+import {
+  httpsCallable,
+  getFunctions,
+
+  // connectFunctionsEmulator,
+} from "firebase/functions";
+// import { log } from "firebase-functions/logger";
 
 // init firebase
 const app = initializeApp(firebaseConfig);
@@ -39,7 +53,14 @@ initializeFirestore(app, {
 
 // init services
 const db = getFirestore();
+
 const auth = getAuth();
+
+const storage = getStorage();
+
+const functions = getFunctions();
+// connectFunctionsEmulator(functions, "localhost", 5001);
+
 enableIndexedDbPersistence(db).catch((err) => {
   if (err.code == "failed-precondition") {
     // Multiple tabs open, persistence can only be enabled
@@ -288,6 +309,85 @@ loginForm.addEventListener("submit", (e) => {
     });
 });
 
+const uploadForm = document.querySelector(".upload");
+uploadForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const file = uploadForm.image.files[0];
+
+  console.log("File: ", file, " File Name: ", file.name);
+
+  const imagesRef = ref(storage, `images/${file.name}`);
+  const uploadTask = uploadBytesResumable(imagesRef, file);
+
+  // uploadBytes(imagesRef, file)
+  //   .then((snapshot) => {
+  //     console.log("Uploaded a blob or file!");
+  //     uploadForm.reset();
+  //   })
+  //   .catch((err) => console.log(err));
+
+  // Listen for state changes, errors, and completion of the upload.
+  uploadTask.on(
+    "state_changed",
+    // { includeMetadataChanges: true }, ?
+    (snapshot) => {
+      // Get task progress, including the number of bytes uploaded and the total number of bytes to be uploaded
+
+      document
+        .querySelector(".uPause")
+        .addEventListener("click", () => uploadTask.pause());
+      document
+        .querySelector(".uResume")
+        .addEventListener("click", () => uploadTask.resume());
+      document
+        .querySelector(".uCancel")
+        .addEventListener("click", () => uploadTask.cancel());
+
+      const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+      console.log("Upload is " + progress + "% done");
+      switch (snapshot.state) {
+        case "paused":
+          console.log("Upload is paused");
+          break;
+        case "running":
+          console.log("Upload is running");
+          break;
+      }
+
+      // const source = snapshot.metadata.fromCache ? "local cache" : "server";
+      // console.log("Data came from: " + source);
+    },
+    (error) => {
+      // A full list of error codes is available at
+      // https://firebase.google.com/docs/storage/web/handle-errors
+      switch (error.code) {
+        case "storage/unauthorized":
+          // User doesn't have permission to access the object
+          console.log("User doesn't have permission to access the object");
+          break;
+        case "storage/canceled":
+          // User canceled the upload
+          console.log("User canceled the upload");
+          break;
+
+        // ...
+
+        case "storage/unknown":
+          // Unknown error occurred, inspect error.serverResponse
+          console.log("Unknown error occurred, inspect error.serverResponse");
+          break;
+      }
+    },
+    () => {
+      // Upload completed successfully, now we can get the download URL
+      getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+        console.log("File available at", downloadURL);
+      });
+    }
+  );
+});
+
 const triggerAuthButton = document.querySelector("#triggerAuthButton");
 triggerAuthButton.addEventListener("click", toggleAuthMethod);
 
@@ -334,4 +434,19 @@ network_switch.addEventListener("change", async (e) => {
     await disableNetwork(db);
     alert("Network access disabled.");
   }
+});
+
+const searchForm = document.querySelector(".search");
+searchForm.addEventListener("change", (e) => {
+  e.preventDefault();
+  const query = searchForm.froom.value;
+  // console.log(query);
+
+  const searchDocs = httpsCallable(functions, "searchDocs");
+  searchDocs({ query: query })
+    .then((result) => {
+      const documents = result.data.documents;
+      console.log(documents);
+    })
+    .catch((err) => console.log(err));
 });
